@@ -97,27 +97,27 @@
   (if window-system
       (or (string-match "^[0-9]\\{2\\}[-_]." filename)
           (and init/cocoa-p
-               (string-match "^cocoa-[0-9]\\{2\\}[-_]."   filename))
+               (string-match "^cocoa[-_][0-9]\\{2\\}[-_]."   filename))
           (and init/carbon-p
-               (string-match "^carbon-[0-9]\\{2\\}[-_]."  filename))
+               (string-match "^carbon[-_][0-9]\\{2\\}[-_]."  filename))
           (and init/mac-p
-               (string-match "^mac-[0-9]\\{2\\}[-_]."     filename))
+               (string-match "^mac[-_][0-9]\\{2\\}[-_]."     filename))
           (and init/linux-p
-               (string-match "^linux-[0-9]\\{2\\}[-_]."   filename))
+               (string-match "^linux[-_][0-9]\\{2\\}[-_]."   filename))
           (and init/cygwin-p
-               (string-match "^cygwin-[0-9]\\{2\\}[-_]."  filename))
+               (string-match "^cygwin[-_][0-9]\\{2\\}[-_]."  filename))
           (and init/win-nt-p
-               (string-match "^win-nt-[0-9]\\{2\\}[-_]."  filename))
+               (string-match "^win-nt[-_][0-9]\\{2\\}[-_]."  filename))
           (and init/meadow-p
-               (string-match "^meadow-[0-9]\\{2\\}[-_]."  filename))
+               (string-match "^meadow[-_][0-9]\\{2\\}[-_]."  filename))
           (and init/win-p
-               (string-match "^windows-[0-9]\\{2\\}[-_]." filename))
+               (string-match "^windows[-_][0-9]\\{2\\}[-_]." filename))
           ;; version
           (string-match (concat "^" (regexp-quote emacs-version)) filename)
           ;; system
           (string-match (concat "^" (regexp-quote system-name)) filename))
     ;; no window system
-    (string-match "^nw-[0-9]\\{2\\}[-_]." filename)))
+    (string-match "^nw[-_][0-9]\\{2\\}[-_]." filename)))
 
 (defun init/success (file time)
   (let* ((time (car time))
