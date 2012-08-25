@@ -1,4 +1,4 @@
-;;; initialize.el
+;;; initialize.el - Best way to load multiple initialize settings of your emacs.
 
 ;; Copyright (C) 2012 Daichi Hirata
 
@@ -63,9 +63,9 @@
 (defvar init/meadow-p (featurep 'meadow))
 (defvar init/win-p    (or init/cygwin-p init/win-nt-p init/meadow-p))
 
-(defun initialize (&optional dir)
-  (let ((d (or dir initialize-dir)))
-    (init/run d)
+(defun* initialize (&key (dir initialize-dir) (show t))
+  (init/run dir)
+  (when show
     (add-hook 'after-init-hook 'init/result)))
 
 (defun init/run (dir)
@@ -114,7 +114,7 @@
                (string-match "^windows-[0-9]\\{2\\}[-_]." filename))
           ;; version
           (string-match (concat "^" (regexp-quote emacs-version)) filename)
-          ;; local
+          ;; system
           (string-match (concat "^" (regexp-quote system-name)) filename))
     ;; no window system
     (string-match "^nw-[0-9]\\{2\\}[-_]." filename)))
@@ -140,6 +140,7 @@
   (mapconcat 'identity (reverse var) "\n"))
 
 (defun init/result ()
+  (interactive)
   (let ((buf (get-buffer-create initialize-result-buffer)))
     (with-current-buffer buf
       (erase-buffer)
@@ -161,7 +162,16 @@
           (let ((end   (search-forward txt nil t))
                 (start (search-backward txt nil t)))
             (when (and start end)
-              (put-text-property start end 'face
-                                 font-lock-keyword-face))))))
+              (put-text-property
+               start end 'face font-lock-keyword-face))))))
+
+(defun init/create-config (type)
+  (interactive "sType: ")
+  (let* ((type (cond ((string= type "system") system-name)
+                     ((string= type "version") emacs-version)
+                     (t (error (concat type "is not exist")))))
+         (local-file (expand-file-name
+                      (concat user-emacs-directory type ".el"))))
+    (append-to-file (format ";; Write to %s specific configuration here." type) nil local-file)))
 
 (provide 'initialize)
