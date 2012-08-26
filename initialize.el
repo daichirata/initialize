@@ -114,6 +114,8 @@
                (string-match "^windows[-_][0-9]\\{2\\}[-_]." filename))
           ;; version
           (string-match (concat "^" (regexp-quote emacs-version)) filename)
+          ;; major-version
+          (string-match (concat "^" (regexp-quote (int-to-string emacs-major-version))) filename)
           ;; system
           (string-match (concat "^" (regexp-quote system-name)) filename))
     ;; no window system
@@ -165,10 +167,11 @@
               (put-text-property
                start end 'face font-lock-keyword-face))))))
 
-(defun init/create-config (type)
+(defun init/generate-config (type)
   (interactive "sType: ")
   (let* ((type (cond ((string= type "system") system-name)
                      ((string= type "version") emacs-version)
+                     ((string= type "major-version") (int-to-string emacs-major-version))
                      (t (error (concat type "is not exist")))))
          (local-file (expand-file-name
                       (concat user-emacs-directory type ".el"))))
