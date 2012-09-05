@@ -62,8 +62,17 @@
 (defvar init/win-nt-p (eq system-type 'windows-nt))
 (defvar init/meadow-p (featurep 'meadow))
 (defvar init/win-p    (or init/cygwin-p init/win-nt-p init/meadow-p))
+(defvar init/version-regexp
+  (concat "^" (regexp-quote (concat emacs-version ".")) "elc?$"))
+(defvar init/major-version-regexp
+  (concat "^" (regexp-quote (concat (int-to-string emacs-major-version) ".")) "elc?$"))
+(defvar init/minor-version-regexp
+  (concat "^" (regexp-quote (concat (int-to-string emacs-major-version) "."
+                                    (int-to-string emacs-minor-version) ".")) "elc?$"))
 
+;;;###autoload
 (defun* initialize (&key (dir initialize-dir) (show t))
+  "Start initialization process."
   (init/run dir)
   (when show
     (add-hook 'after-init-hook 'init/result)))
@@ -72,9 +81,10 @@
   (let ((load-dir (init/directory-files dir)))
     (loop for x in load-dir
           for filename = (file-name-nondirectory x)
-          if (file-directory-p x) do (init/run x)
-          else do
-          (when (init/resolve filename) (init/load x)))))
+          do
+          (if (file-directory-p x)
+              (init/run x)
+            (when (init/resolve filename) (init/load x))))))
 
 (defun init/directory-files (dir)
   (let ((files (directory-files dir t "[^.]")))
@@ -113,9 +123,11 @@
           (and init/win-p
                (string-match "^windows[-_][0-9]\\{2\\}[-_]." filename))
           ;; version
-          (string-match (concat "^" (regexp-quote emacs-version)) filename)
+          (string-match init/version-regexp filename)
           ;; major-version
-          (string-match (concat "^" (regexp-quote (int-to-string emacs-major-version))) filename)
+          (string-match init/major-version-regexp filename)
+          ;; minor-version
+          (string-match init/minor-version-regexp filename)
           ;; system
           (string-match (concat "^" (regexp-quote system-name)) filename))
     ;; no window system
@@ -164,14 +176,15 @@
           (let ((end   (search-forward txt nil t))
                 (start (search-backward txt nil t)))
             (when (and start end)
-              (put-text-property
-               start end 'face font-lock-keyword-face))))))
+              (put-text-property start end 'face font-lock-keyword-face))))))
 
 (defun init/generate-config (type)
   (interactive "sType: ")
   (let* ((type (cond ((string= type "system") system-name)
                      ((string= type "version") emacs-version)
                      ((string= type "major-version") (int-to-string emacs-major-version))
+                     ((string= type "minor-version") (concat (int-to-string emacs-major-version) "."
+                                                             (int-to-string emacs-minor-version)))
                      (t (error (concat type "is not exist")))))
          (local-file (expand-file-name
                       (concat user-emacs-directory type ".el"))))
