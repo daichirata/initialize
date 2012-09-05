@@ -19,6 +19,8 @@
 
 ;; Author: Daichi Hirata <daichi.hirat@gmail.com>
 
+;; Refs: http://coderepos.org/share/browser/lang/elisp/init-loader/init-loader.el
+
 ;;; Commentary:
 ;;
 ;;   TODO
