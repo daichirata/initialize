@@ -83,10 +83,9 @@
   (let ((load-dir (init/directory-files dir)))
     (loop for x in load-dir
           for filename = (file-name-nondirectory x)
-          do
-          (if (file-directory-p x)
-              (init/run x)
-            (when (init/resolve filename) (init/load x))))))
+          do (if (file-directory-p x)
+                 (init/run x)
+               (when (init/resolve filename) (init/load x))))))
 
 (defun init/directory-files (dir)
   (let ((files (directory-files dir t "[^.]")))
@@ -173,12 +172,12 @@
 
 (defun init/put-text-property (buf)
   (with-current-buffer buf
-    (loop for txt in init/slow do
+    (loop for txt in init/slow
+          for start = (search-backward txt nil t)
+          for end   = (search-forward txt nil t)
+          if (and start end) do
           (goto-char (point-min))
-          (let ((end   (search-forward txt nil t))
-                (start (search-backward txt nil t)))
-            (when (and start end)
-              (put-text-property start end 'face font-lock-keyword-face))))))
+          (put-text-property start end 'face font-lock-keyword-face))))
 
 (defun init/generate-config (type)
   (interactive "sType: ")
