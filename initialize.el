@@ -21,16 +21,9 @@
 
 ;; Refs: http://coderepos.org/share/browser/lang/elisp/init-loader/init-loader.el
 
-;;; Commentary:
-;;
-;;   TODO
-
-;;; Useage
-;;
-;;   TODO
-
 ;;; Code:
 (eval-when-compile (require 'cl))
+(require 'dired)
 (require 'benchmark)
 
 (defgroup initialize nil
@@ -42,13 +35,28 @@
   :type 'directory
   :group 'initialize)
 
+(defcustom initialize-pack-dir  "~/.emacs.d/init"
+  ""
+  :type 'directory
+  :group 'initialize)
+
+(defcustom initialize-initfuncs "~/.emacs.d/init/initfuncs.el"
+  ""
+  :type 'string
+  :group 'initialize)
+
+(defcustom initialize-pack-benchmark t
+  ""
+  :type 'boolean
+  :group 'initialize)
+
 (defcustom initialize-result-buffer
   "*initialize*"
   "Name of buffer for initialize"
   :type 'string
   :group 'initialize)
 
-(defcustom initialize-slow-indication 0.1
+(defcustom initialize-slow-threshold 0.1
   ""
   :type 'integer
   :group 'initialize)
@@ -72,38 +80,109 @@
   (concat "^" (regexp-quote (concat (int-to-string emacs-major-version) "."
                                     (int-to-string emacs-minor-version) ".")) "elc?$"))
 
+(defvar init/pack-benchmark-format
+";;
+;; packing file: %s
+;;
+(let ((filename \"%s\"))
+   (condition-case err
+      (let ((time (benchmark-run ((lambda ()
+;; body
+%s
+;; end body
+)))))
+        (init/success filename time))
+     (error (init/fail filename (error-message-string err)))))\n\n\n")
+
+;;         (message \"%%s\" time)
+
+(define-minor-mode initialize-auto-pack-mode
+  "Toggle pack on save for init file."
+  :lighter " AP"
+  :group 'initialize
+  (if initialize-auto-pack-mode
+      (add-hook 'after-save-hook #'initialize-pack-init-files nil t)
+    (remove-hook 'after-save-hook #'initialize-pack-init-files t)))
+
+(defun enable-initialize-auto-pack-mode ()
+  (add-hook 'emacs-lisp-mode-hook #'--enable-initialize-auto-pack-mode))
+
+(defun --enable-initialize-auto-pack-mode ()
+  (when (init/init-dir-p)
+    (initialize-auto-pack-mode)))
+
 ;;;###autoload
-(defun* initialize (&key (dir initialize-dir) (show t))
+(defun* initialize (&key (dir nil) (file nil) (showlog t))
   "Start initialization process."
-  (init/run dir)
-  (when show
+  (when dir
+    (setq initialize-dir dir))
+  (if file
+      (init/load-file file)
+    (init/load-dir dir))
+  (when showlog
     (add-hook 'after-init-hook 'init/result)))
 
-(defun init/run (dir)
-  (let ((load-dir (init/directory-files dir)))
-    (loop for x in load-dir
-          for filename = (file-name-nondirectory x)
-          do (if (file-directory-p x)
-                 (init/run x)
-               (when (init/resolve filename) (init/load x))))))
+;;;###autoload
+(defun initialize-load-pack-file ()
+  (initialize :file (init/pack-filename)))
+
+(defun initialize-pack-init-files ()
+  (interactive)
+  (when (file-exists-p (init/pack-filename))
+    (dired-delete-file (init/pack-filename) 'always))
+  (when (file-exists-p initialize-initfuncs)
+    (init/pack-file (expand-file-name initialize-initfuncs)))
+  (init/pack-dir initialize-dir))
+
+(defun init/init-dir-p ()
+  (string-match (file-truename initialize-dir)
+                (file-truename default-directory)))
+
+(defun init/pack-filename ()
+  (expand-file-name (concat (file-name-as-directory initialize-pack-dir)
+                            (format "init-pack-%s.el" (system-name)))))
 
 (defun init/directory-files (dir)
-  (let ((files (directory-files dir t "[^.]")))
-    (loop for f in files
-          unless (string-match "\\.elc$" f)
-          collect f)))
+  (loop for file in (directory-files dir t "[^.]")
+        unless (string-match "\\.elc$" file)
+        collect file))
 
-(defun init/load (file)
+(defun init/load-dir (dir)
+  (init/only-if-match-filename dir 'init/load-file))
+
+(defun init/pack-dir (dir)
+  (init/only-if-match-filename dir 'init/pack-file))
+
+(defun init/load-file (file)
   (let* ((base  (file-name-sans-extension file))
          (el    (concat base ".el"))
          (elc   (concat base ".elc"))
          (loadf (if (file-exists-p elc) elc el)))
     (condition-case err
-        (let ((time (benchmark-run (load loadf))))
-          (init/success loadf time))
+      (let ((time (benchmark-run (load loadf))))
+        (init/success loadf time))
       (error (init/fail loadf (error-message-string err))))))
 
-(defun init/resolve (filename)
+(defun init/pack-file (filename)
+  (let ((body (with-temp-buffer (insert-file-contents filename)
+                                (buffer-string))))
+    (append-to-file
+     (if initialize-pack-benchmark
+         (format init/pack-benchmark-format filename filename body)
+       (concat body "\n\n"))
+     nil (concat (file-name-as-directory initialize-pack-dir)
+                 (format "init-pack-%s.el" (system-name))))))
+
+(defun init/only-if-match-filename (dir func)
+  (loop for file in (init/directory-files dir)
+        for filename = (file-name-nondirectory file)
+        if (file-directory-p file)
+        do (init/only-if-match-filename file func)
+        else
+        if (init/match-file-p filename)
+        do (funcall func file)))
+
+(defun init/match-file-p (filename)
   ;; window system
   (if window-system
       (or (string-match "^[0-9]\\{2\\}[-_]." filename)
@@ -135,16 +214,15 @@
     (string-match "^nw[-_][0-9]\\{2\\}[-_]." filename)))
 
 (defun init/success (file time)
-  (let* ((time (car time))
-         (stime (truncate-string-to-width
-                 (number-to-string time) 6 0))
-         (lgh (length stime))
+  (let* ((time  (format "%f" (car time)))
+         (stime (truncate-string-to-width time 6 0))
+         (lgh   (length stime))
          (atime (if (< lgh 6)
                     (concat stime (make-string (- 6 lgh) ?0))
                   stime))
-         (msg (format " %s.sec %s" atime file)))
+         (msg   (format " %s.sec %s" atime file)))
     (push msg init/success)
-    (when (< initialize-slow-indication time)
+    (when (< initialize-slow-threshold (string-to-number time))
       (push msg init/slow))))
 
 (defun init/fail (file err)
@@ -155,7 +233,6 @@
   (mapconcat 'identity (reverse var) "\n"))
 
 (defun init/result ()
-  (interactive)
   (let ((buf (get-buffer-create initialize-result-buffer)))
     (with-current-buffer buf
       (erase-buffer)
@@ -175,8 +252,8 @@
     (loop for txt in init/slow
           for start = (search-backward txt nil t)
           for end   = (search-forward txt nil t)
-          if (and start end) do
-          (goto-char (point-min))
+          if (and start end)
+          do (goto-char (point-min))
           (put-text-property start end 'face font-lock-keyword-face))))
 
 (defun init/generate-config (type)
